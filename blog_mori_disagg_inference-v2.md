@@ -13,8 +13,8 @@ This post describes what we achieve, how we achieve it, and our plans for the ro
 - **2,378 tok/s/GPU** on 24 GPUs — **1.22× higher throughput per GPU** than B200 SGLang (48 GPUs).
 - Full-stack optimizations: AITER GEMM tuning, MoRI quantized all-to-all (up to **2.56× bandwidth reduction**), MoRI-IO KV cache backend (**~10% higher throughput** than Mooncake), Two-Batch Overlap with SDMA, Specv2 MTP on ROCm, and CPU streaming optimization.
 
-![InferenceX TCO pareto curve — AMD Instinct™ MI355X MoRI SGLang vs B200 Dynamo SGLang](curve1.png)
-
+![InferenceX TCO comparison — AMD Instinct™ MI355X MoRI SGLang vs B200 Dynamo SGLang](tco1.png)
+*Figure 1: InferenceX TCO comparison — AMD Instinct™ MI355X MoRI SGLang vs B200 Dynamo SGLang*
 
 ## Results at a Glance
 
@@ -26,24 +26,23 @@ At the typical operating point representative of production coding assistants an
 
 AMD Instinct™ MI355X delivers **2.9% lower cost** than B200 TRT-LLM, **39% lower cost** than B200 SGLang, and **1.22× higher throughput** per GPU than B200 SGLang — winning on both cost and performance simultaneously.
 
-![Full pareto curve — throughput vs interactivity for AMD Instinct™ MI355X and B200 configurations](tco1.png)
-
+![Full pareto curve — throughput vs interactivity for AMD Instinct™ MI355X and B200 configurations](curve1.png)
+*Figure 2: Full pareto curve — throughput vs interactivity for AMD Instinct™ MI355X and B200 configurations*
 
 ## Key Optimizations
 
 We achieved these results through a series of full-stack optimizations spanning compute kernels, communication, and serving infrastructure. The following sections walk through each in detail.
 
-### AITER GEMM Tuning for MoE in Distributed Scenarios
+### FlyDSL FusedMoE for High-Performance MoE Compute
 
-MoE GEMM performance is shape-dependent, and the dominant shapes differ by serving scenario. In **low-latency pure TP** deployments, each GPU processes all experts with small batch sizes, producing tall-skinny GEMMs. In **high-throughput DP+EP** deployments, tokens are distributed across expert-parallel ranks, yielding different N/K dimensions per expert. We provide separate tuning configurations for each scenario to maximize MI355X utilization.
+Traditionally, FusedMoE kernels on AMD relied solely on Composable Kernel (CK) — hand-tuned templates that are performant but inflexible. [AITER](https://github.com/ROCm/aiter) introduces **FlyDSL** (Flexible Layout Python DSL), a Python DSL backed by an MLIR stack for authoring GPU kernels with explicit layouts and tiling, as a competitive FusedMoE kernel path for mixed-precision MoE (e.g., A4W4) on MI355X. FlyDSL enables rapid exploration of kernel configurations beyond what hand-tuned CK templates cover, and at a typical concurrency of 512, we gained up to **1.6× latency reduction** for the FusedMoE compute.
 
-[AITER](https://github.com/ROCm/aiter) optimizes both the key GEMM and FusedMoE compute kernels on MI355X:
+MoE GEMM performance is shape-dependent, and the dominant shapes differ by serving scenario. In **low-latency pure TP** deployments, each GPU processes all experts with small batch sizes, producing tall-skinny GEMMs. In **high-throughput DP+EP** deployments, tokens are distributed across expert-parallel ranks, yielding different N/K dimensions per expert. FlyDSL allows us to provide separate tuning configurations for each scenario to maximize MI355X utilization.
 
-**Triton blockscale GEMM tuning** — the A8W8 blockscale GEMM path uses per-shape tuned configurations for MI355X (gfx950). Key shapes like (N=7168, K=16384) and (N=16384, K=1536) — matching DeepSeek-R1's expert dimensions — are tuned with optimized block sizes, warp counts, pipeline stages, and k-splitting parameters. Special-case tuning for ultra-small M values (≤8, ≤256) targets the small per-expert batches typical in EP decode.
+**Triton blockscale GEMM tuning** — alongside FlyDSL, the A8W8 blockscale GEMM path uses per-shape tuned configurations for MI355X (gfx950). Key shapes like (N=7168, K=16384) and (N=16384, K=1536) — matching DeepSeek-R1's expert dimensions — are tuned with optimized block sizes, warp counts, pipeline stages, and k-splitting parameters. Special-case tuning for ultra-small M values (≤8, ≤256) targets the small per-expert batches typical in EP decode.
 
-![GEMM tuning speedup](gemm_tuning_speedup.svg)
-
-**FlyDSL for FusedMoE** — traditionally, FusedMoE kernels on AMD relied solely on Composable Kernel (CK). FlyDSL (Flexible Layout Python DSL) — a Python DSL backed by an MLIR stack for authoring GPU kernels with explicit layouts and tiling — is now integrated into AITER as a competitive FusedMoE kernel path for mixed-precision MoE (e.g., A4W4), enabling rapid exploration of kernel configurations beyond what hand-tuned CK templates cover. At a typical concurrency of 512, we gained up to **1.6× latency reduction** for this part.
+![FlyDSL kernel and Triton gemm tuning speedup](gemm_tuning_speedup.svg)
+*Figure 3: FlyDSL kernel and Triton gemm tuning speedup*
 
 
 ### MoRI Quantized All-to-All for Expert Parallelism
@@ -134,6 +133,7 @@ The dispatch and combine operations are split into A/B phases — `dispatch_a` f
 When SDMA is enabled (`MORI_ENABLE_SDMA=true`), data transfers run on AMD's dedicated System DMA engines that move data between GPU memory and network interfaces without consuming any compute units. This achieves true zero-compute-overhead communication, keeping every compute unit available for GEMM operations throughout the pipeline.
 
 ![Two-Batch Overlap pipeline diagram — interleaved compute and communication streams](tbo1.png)
+*Figure 4: Two-Batch Overlap pipeline diagram — interleaved compute and communication streams*
 
 
 ### Specv2 MTP on ROCm
