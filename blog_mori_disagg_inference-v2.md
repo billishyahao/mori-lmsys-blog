@@ -158,6 +158,8 @@ Under high-concurrency PD disaggregation (e.g., 2,048 concurrent requests), the 
 
 The next frontier for distributed inference is shifting from chat-style workloads toward **agentic applications** — tools like Claude Code, Codex, and Cursor that drive deep multi-turn, tool-augmented conversations with long context windows (up to 1M tokens), extremely high KV cache reuse, and rapid-fire request bursts from parallel subagent spawning. InferenceX is developing an agentic coding benchmark to capture these patterns, moving toward a true end-to-end system benchmark. Our future optimizations on AMD Instinct™ MI355X will target this workload by leveraging more advanced asynchronous parallelism strategies such as DWDP (Disaggregated Wide Data Parallelism), as well as exploiting ROCm platform-specific capabilities like SDMA for fully asynchronous, zero-compute-overhead data movement — ultimately pushing disaggregated MoE serving to match the burst-traffic, cache-heavy demands of agentic inference at scale.
 
+Beyond inference, SDMA's zero-compute-overhead communication capability is not limited to serving workloads. We are exploring the potential of extending SDMA to **training and reinforcement learning frameworks** such as Miles. Early validation in the DeepSpeed training framework has already demonstrated **~10% performance gains** [8], suggesting that dedicated DMA engines can meaningfully accelerate collective communication in large-scale distributed training as well.
+
 
 ## Summary
 
@@ -197,6 +199,8 @@ We would like to thank the AMD ROCm team for their close collaboration on MoRI, 
 [6] [Practical, Fault-Robust Distributed Inference for DeepSeek on AMD MI300X](https://rocm.blogs.amd.com/software-tools-optimization/wide-ep-deepseek/README.html) | AMD ROCm Blog
 
 [7] [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437) | DeepSeek-AI
+
+[8] [DeepSpeed SDMA Integration on AMD Instinct](https://x.com/DeepSpeedAI/status/2056401598839140384) | DeepSpeed
 
 
 ## Endnotes
