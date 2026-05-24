@@ -31,18 +31,7 @@ AMD Instinct™ MI355X delivers **2.9% lower cost** than B200 TRT-LLM, **39% low
 
 ## Key Optimizations
 
-We achieved these results through a series of full-stack optimizations spanning compute kernels, communication, and serving infrastructure. The following sections walk through each in detail.
-
-### FlyDSL FusedMoE for High-Performance MoE Compute
-
-Traditionally, FusedMoE kernels on AMD relied solely on Composable Kernel (CK) — hand-tuned templates that are performant but inflexible. [AITER](https://github.com/ROCm/aiter) introduces **FlyDSL** (Flexible Layout Python DSL), a Python DSL backed by an MLIR stack for authoring GPU kernels with explicit layouts and tiling, as a competitive FusedMoE kernel path for mixed-precision MoE (e.g., A4W4) on MI355X. FlyDSL enables rapid exploration of kernel configurations beyond what hand-tuned CK templates cover, and at a typical concurrency of 512, we gained up to **1.6× latency reduction** for the FusedMoE compute.
-
-MoE GEMM performance is shape-dependent, and the dominant shapes differ by serving scenario. In **low-latency pure TP** deployments, each GPU processes all experts with small batch sizes, producing tall-skinny GEMMs. In **high-throughput DP+EP** deployments, tokens are distributed across expert-parallel ranks, yielding different N/K dimensions per expert. FlyDSL allows us to provide separate tuning configurations for each scenario to maximize MI355X utilization.
-
-**Triton blockscale GEMM tuning** — alongside FlyDSL, the A8W8 blockscale GEMM path uses per-shape tuned configurations for MI355X (gfx950). Key shapes like (N=7168, K=16384) and (N=16384, K=1536) — matching DeepSeek-R1's expert dimensions — are tuned with optimized block sizes, warp counts, pipeline stages, and k-splitting parameters. Special-case tuning for ultra-small M values (≤8, ≤256) targets the small per-expert batches typical in EP decode.
-
-![FlyDSL kernel and Triton gemm tuning speedup](gemm_tuning_speedup.svg)
-*Figure 3: FlyDSL kernel and Triton gemm tuning speedup*
+We achieved these results through a series of full-stack optimizations spanning communication, compute kernels and serving infrastructure. The following sections walk through each in detail.
 
 
 ### MoRI Quantized All-to-All for Expert Parallelism
@@ -55,7 +44,7 @@ We built hybrid quantized all-to-all in a series of PRs: FP4 dispatch + FP8 comb
 
 In expert-parallel MoE inference, each token must be dispatched to the top-k selected experts via dispatch and combine communication primitives. For DeepSeek-R1 with a hidden dimension of 7,168 and top-8 expert routing, BF16 communication volume is significantly higher than that of FP8 and FP4 quantized communication.
 
-The key insight is that communication quantization should match the model's weight precision. If weights are already MXFP4, dispatch precision does not need to exceed FP4. Similarly, expert outputs (combine phase) tolerate FP8 quantization without meaningful accuracy loss.
+The key insight is that on-the-fly MXFP4 quantization of dispatch will bring faster transmision while no accuracy loss happened. Similarly, expert outputs (combine phase) tolerate FP8 quantization without meaningful accuracy loss.
 
 MoRI supports multi-level quantized communication:
 
@@ -67,7 +56,6 @@ MoRI supports multi-level quantized communication:
 | Uniform[−1024, 1024] (scale-active) | fp8_blockwise specialized | **~770 µs**     |
 | Force-scale-active                  | fp8_blockwise specialized | **~769 µs**     |
 | Reference                           | bf16 no-quant             | ~907 µs         |
-| Reference                           | fp8_direct_cast           | ~526 µs         |
 
 For MXFP4 models such as `amd/DeepSeek-R1-0528-MXFP4-v2`, the system uses **FP4 dispatch + FP8 combine**, achieving a **2.56× overall round-trip bandwidth reduction** (from 28,672 to 11,200 bytes per token).
 
@@ -133,18 +121,30 @@ The dispatch and combine operations are split into A/B phases — `dispatch_a` f
 When SDMA is enabled (`MORI_ENABLE_SDMA=true`), data transfers run on AMD's dedicated System DMA engines that move data between GPU memory and network interfaces without consuming any compute units. This achieves true zero-compute-overhead communication, keeping every compute unit available for GEMM operations throughout the pipeline.
 
 ![Two-Batch Overlap pipeline diagram — interleaved compute and communication streams](tbo1.png)
-*Figure 4: Two-Batch Overlap pipeline diagram — interleaved compute and communication streams*
+*Figure 3: Two-Batch Overlap pipeline diagram — interleaved compute and communication streams*
+
+
+### FlyDSL FusedMoE for High-Performance MoE Compute
+
+Traditionally, FusedMoE kernels on AMD relied solely on Composable Kernel (CK) — hand-tuned templates that are performant but inflexible. [AITER](https://github.com/ROCm/aiter) introduces **FlyDSL** (Flexible Layout Python DSL), a Python DSL backed by an MLIR stack for authoring GPU kernels with explicit layouts and tiling, as a competitive FusedMoE kernel path for mixed-precision MoE (e.g., A4W4) on MI355X. FlyDSL enables rapid exploration of kernel configurations beyond what hand-tuned CK templates cover, and at a typical concurrency of 512, we gained up to **1.6× latency reduction** for the FusedMoE compute.
+
+MoE GEMM performance is shape-dependent, and the dominant shapes differ by serving scenario. In **low-latency pure TP** deployments, each GPU processes all experts with small batch sizes, producing tall-skinny GEMMs. In **high-throughput DP+EP** deployments, tokens are distributed across expert-parallel ranks, yielding different N/K dimensions per expert. FlyDSL allows us to provide separate tuning configurations for each scenario to maximize MI355X utilization.
+
+**Triton blockscale GEMM tuning** — alongside FlyDSL, the A8W8 blockscale GEMM path uses per-shape tuned configurations for MI355X (gfx950). Key shapes like (N=7168, K=16384) and (N=16384, K=1536) — matching DeepSeek-R1's expert dimensions — are tuned with optimized block sizes, warp counts, pipeline stages, and k-splitting parameters. Special-case tuning for ultra-small M values (≤8, ≤256) targets the small per-expert batches typical in EP decode.
+
+![FlyDSL kernel and Triton gemm tuning speedup](gemm_tuning_speedup.svg)
+*Figure 4: FlyDSL kernel and Triton gemm tuning speedup*
+
+Also by integrating MoRI's shared memory primitives directly into FlyDSL ([ROCm/mori#280](https://github.com/ROCm/mori/pull/280)), FusedMoE kernels can issue cross-GPU data transfers from within the same kernel that performs expert computation — fusing compute and communication into a single launch. This opens the door to warp-level overlap where some warps compute while others move data, eliminating inter-kernel gaps and further reducing MoE latency in the future.
 
 
 ### Specv2 MTP on ROCm
 
-We enabled Specv2 on ROCm by fixing draft-to-verify stream synchronization ([#21940](https://github.com/sgl-project/sglang/pull/21940)) — recording a CUDA event after draft GPU work and waiting on it in the verify plan stream, ensuring correct data handoff without over-synchronizing the entire main stream.
+DeepSeek-R1 supports Multi-Token Prediction (MTP) via the NEXTN speculative decoding algorithm, predicting **2** additional tokens per step. SGLang's **Specv2** pipeline overlaps the draft and verify phases by running verification preparation on a separate GPU stream while the draft model executes, hiding scheduling overhead. This was previously a CUDA-only path. In [#17450](https://github.com/sgl-project/sglang/pull/17450) we enabled Specv2 on ROCm by adding AITER attention backend support for draft model CUDA graph capture and the overlap plan stream, bringing the full Specv2 pipeline to AMD GPUs.
 
-DeepSeek supports Multi-Token Prediction (MTP) via the NEXTN speculative decoding algorithm, predicting **2** additional tokens per step. MTP creates a compounding effect with quantized communication: it increases the decode batch size by **3×** (original + 2 speculative tokens), improving all-to-all bandwidth utilization at larger batch sizes, while FP4/FP8 quantization keeps per-token communication cost low despite the larger batches.
+MTP also creates a compounding effect with quantized communication: it increases the decode batch size by **3×** (original + 2 speculative tokens), improving all-to-all bandwidth utilization at larger batch sizes, while FP4/FP8 quantization keeps per-token communication cost low despite the larger batches.
 
-SGLang's **Specv2** pipeline overlaps the draft and verify phases by running verification preparation on a separate GPU stream while the draft model executes. This hides scheduling overhead and is now the default path in SGLang. We enabled it on ROCm with AMD-specific attention backends (AITER) for draft CUDA graph capture and a targeted stream synchronization fix that ensures correct draft-to-verify data handoff.
-
-With our optimization, MTP on AMD Instinct™ MI355X runs with full overlap scheduling, combining multi-token prediction throughput gains with hidden scheduling latency.
+With this enablement, MTP on AMD Instinct™ MI355X delivers **+4% total token throughput** and **-3.6% TPOT** compared to running without Specv2, with no meaningful accuracy loss (GSM8K 5-shot: 0.923).
 
 
 ### CPU Streaming Optimization
@@ -181,7 +181,14 @@ The results are open-source and continuously validated via [InferenceX](https://
 
 ## Acknowledgements
 
-We would like to thank the AMD SGLang team for their close collaboration on MoRI, AITER, and ROCm platform enablement, and the SemiAnalysis team for building and maintaining the InferenceX benchmark platform. This work was made possible by the joint effort of SGLang and AMD contributors working together on compute optimization, communication libraries, and serving infrastructure.
+We would like to thank the AMD SGLang team for their close collaboration on MoRI, AITER, and ROCm platform enablement, and the SemiAnalysis team for building and maintaining the InferenceX benchmark platform. This work was made possible by the joint effort of AMD and SGLANG contributors working together on compute optimization, communication libraries, and serving infrastructure.
+
+AMD team: Xiao Hai, Duyi Wang, Di Tian, Feiyue Zhai, Mingzhi Liu, Yanfei Wang, Yutong Wu, Niko Ma, Jiahao Zhou, Wun-guo Huang, Bill He, Theresa Shan, Allen Hubbe, Swaminathan Venkataraman, Muthu Natarajan Sri Krishnamoorthy Ghanapatigal, Ankit Gupta,   Pirabhu Raman, David Sidler, Brandon Potter, Brad Beckmann and many more  
+
+SGLang Core Team and Community Contributors: Baizhou Zhang, Shangming Cai, Cheng Wan, Liangsheng Yin, Lianmin Zheng
+
+Semi analysis team: Dylan Patel, Cam Quilici, Bryan Shan, Alec Ibarra, Kimbo Chen, Daniel Nishball, and Cheang Kang Wen
+
 
 
 ## References
