@@ -167,10 +167,10 @@ This post demonstrates how AMD Instinct™ MI355X with MoRI on SGLang achieves c
 
 This result is driven by a full-stack optimization effort across compute, communication, and serving:
 
-- **AITER GEMM tuning + FlyDSL FusedMoE** — platform-tuned compute kernels for both TP and DP+EP scenarios on MI355X
 - **MoRI quantized all-to-all** — hybrid FP4/FP8 communication with adaptive kernel selection, reducing round-trip bandwidth by up to **2.56×**
 - **MoRI-IO KV cache backend** — lock-free inline transfer with high-concurrency RDMA, delivering ~10% higher throughput than Mooncake
 - **Two-Batch Overlap with SDMA** — hiding communication latency behind compute using AMD's dedicated DMA engines
+- **AITER GEMM tuning + FlyDSL FusedMoE** — platform-tuned compute kernels for both TP and DP+EP scenarios on MI355X
 - **Specv2 MTP on ROCm** — full overlap scheduling for multi-token prediction, increasing effective decode batch size by 3×
 - **CPU streaming optimization** — asyncio batching and SSE fast path, unlocking +20% output throughput at 2,048 concurrency
 
@@ -183,7 +183,7 @@ The results are open-source and continuously validated via [InferenceX](https://
 
 We would like to thank the AMD SGLang team for their close collaboration on MoRI, AITER, and ROCm platform enablement, and the SemiAnalysis team for building and maintaining the InferenceX benchmark platform. This work was made possible by the joint effort of AMD and SGLANG contributors working together on compute optimization, communication libraries, and serving infrastructure.
 
-AMD team: Xiao Hai, Duyi Wang, Di Tian, Feiyue Zhai, Mingzhi Liu, Yanfei Wang, Yutong Wu, Niko Ma, Jiahao Zhou, Wun-guo Huang, Bill He, Theresa Shan, Allen Hubbe, Swaminathan Venkataraman, Muthu Natarajan Sri Krishnamoorthy Ghanapatigal, Ankit Gupta,   Pirabhu Raman, David Sidler, Brandon Potter, Brad Beckmann and many more  
+AMD team: Xiao Hai, Duyi Wang, Di Tian, Feiyue Zhai, Mingzhi Liu, Yanfei Wang, Yutong Wu, Niko Ma, Jiahao Zhou, Wun-guo Huang, Bill He, Theresa Shan, Hubert Lu, Allen Hubbe, Swaminathan Venkataraman, Muthu Natarajan Sri Krishnamoorthy Ghanapatigal, Ankit Gupta,   Pirabhu Raman, David Sidler, Brandon Potter, Brad Beckmann and many more  
 
 SGLang Core Team and Community Contributors: Baizhou Zhang, Shangming Cai, Cheng Wan, Liangsheng Yin, Lianmin Zheng
 
