@@ -1,10 +1,10 @@
-# Win on TCO: How AMD Instinct™ MI355X Achieves Cost-Competitive Distributed Inference Through MoRI
+# Win on TCO: How AMD Instinct™ MI355X Achieves Cost-Competitive Distributed Inference Through SGLang with MoRI
 
 The SGLang and AMD Team | May 2026
 
 ---
 
-The SGLang team has worked closely with AMD to unlock competitive Total Cost of Ownership (TCO) for large-scale DeepSeek-R1 disaggregated inference on AMD Instinct™ MI355X GPUs. Building on [SGLang](https://github.com/sgl-project/sglang)'s serving framework and AMD's [MoRI](https://github.com/ROCm/mori) communication library, we demonstrate that AMD achieves competitive — and at key operating points, superior — TCO compared to NVIDIA B200 running Dynamo + TRT-LLM. These results are validated by [InferenceX](https://github.com/SemiAnalysisAI/InferenceX), SemiAnalysis's open-source continuous benchmark platform that tests across hundreds of GPUs with a [live dashboard](https://inferencex.com).
+The SGLang and AMD team has worked closely to unlock competitive Total Cost of Ownership (TCO) for large-scale DeepSeek-R1 disaggregated inference on AMD Instinct™ MI355X GPUs. Building on [SGLang](https://github.com/sgl-project/sglang)'s serving framework and AMD's [MoRI](https://github.com/ROCm/mori) communication library, we demonstrate that AMD achieves competitive — and at key operating points, superior — TCO compared to NVIDIA B200 running Dynamo + TRT-LLM. These results are validated by [InferenceX](https://github.com/SemiAnalysisAI/InferenceX), SemiAnalysis's open-source continuous benchmark platform that tests across hundreds of GPUs with a [live dashboard](https://inferencex.com).
 
 This post describes what we achieve, how we achieve it, and our plans for the road ahead.
 
@@ -181,7 +181,7 @@ The results are open-source and continuously validated via [InferenceX](https://
 
 ## Acknowledgements
 
-We would like to thank the AMD ROCm team for their close collaboration on MoRI, AITER, and ROCm platform enablement, and the SemiAnalysis team for building and maintaining the InferenceX benchmark platform. This work was made possible by the joint effort of SGLang and AMD contributors working together on compute optimization, communication libraries, and serving infrastructure.
+We would like to thank the AMD SGLang team for their close collaboration on MoRI, AITER, and ROCm platform enablement, and the SemiAnalysis team for building and maintaining the InferenceX benchmark platform. This work was made possible by the joint effort of SGLang and AMD contributors working together on compute optimization, communication libraries, and serving infrastructure.
 
 
 ## References
