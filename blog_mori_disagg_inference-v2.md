@@ -44,7 +44,7 @@ We built hybrid quantized all-to-all in a series of PRs: FP4 dispatch + FP8 comb
 
 In expert-parallel MoE inference, each token must be dispatched to the top-k selected experts via dispatch and combine communication primitives. For DeepSeek-R1 with a hidden dimension of 7,168 and top-8 expert routing, BF16 communication volume is significantly higher than that of FP8 and FP4 quantized communication.
 
-The key insight is that on-the-fly MXFP4 quantization of dispatch will bring faster transmision while no accuracy loss happened. Similarly, expert outputs (combine phase) tolerate FP8 quantization without meaningful accuracy loss.
+The key insight is that on-the-fly MXFP4 quantization of dispatch will bring faster transmision with accuracy lossless. Similarly, expert outputs (combine phase) tolerate FP8 quantization without meaningful accuracy loss.
 
 MoRI supports multi-level quantized communication:
 
@@ -183,7 +183,7 @@ The results are open-source and continuously validated via [InferenceX](https://
 
 We would like to thank the AMD SGLang team for their close collaboration on MoRI, AITER, and ROCm platform enablement, and the SemiAnalysis team for building and maintaining the InferenceX benchmark platform. This work was made possible by the joint effort of AMD and SGLANG contributors working together on compute optimization, communication libraries, and serving infrastructure.
 
-AMD team: Xiao Hai, Duyi Wang, Di Tian, Feiyue Zhai, Mingzhi Liu, Yanfei Wang, Yutong Wu, Niko Ma, Jiahao Zhou, Wun-guo Huang, Bill He, Theresa Shan, Hubert Lu, Allen Hubbe, Swaminathan Venkataraman, Muthu Natarajan Sri Krishnamoorthy Ghanapatigal, Ankit Gupta,   Pirabhu Raman, David Sidler, Brandon Potter, Brad Beckmann and many more  
+AMD team: Xiao Hai, Duyi Wang, Di Tian, Feiyue Zhai, Mingzhi Liu, Yanfei Wang, Yutong Wu, Niko Ma, Jiahao Zhou, Wun-guo Huang, Bill He, Theresa Shan, Bingxu Chen, Zhaoyi Li, Hubert Lu, Allen Hubbe, Swaminathan Venkataraman, Muthu Natarajan Sri Krishnamoorthy Ghanapatigal, Ankit Gupta, Pirabhu Raman, David Sidler, Brandon Potter, Brad Beckmann and many more
 
 SGLang Core Team and Community Contributors: Baizhou Zhang, Shangming Cai, Cheng Wan, Liangsheng Yin, Lianmin Zheng
 
@@ -216,4 +216,6 @@ Semi analysis team: Dylan Patel, Cam Quilici, Bryan Shan, Alec Ibarra, Kimbo Che
 
 [#2] TCO estimates sourced from SemiAnalysis InferenceXv2 analysis. Hardware costs reflect hyperscaler pricing models.
 
-[#3] Performance results measured by SemiAnalysis InferenceX continuous benchmark platform. Benchmark methodology and raw data available at https://github.com/SemiAnalysisAI/InferenceX.
+[#3] All above optimizatons are upstreamed into Sglang and can be reproduced through nightly rocm image lmsysorg/sglang-rocm:v0.5.10.post1-rocm720-mi35x-20260501.
+
+[#4] Performance results measured by SemiAnalysis InferenceX continuous benchmark platform. Benchmark methodology and raw data available at https://github.com/SemiAnalysisAI/InferenceX.
